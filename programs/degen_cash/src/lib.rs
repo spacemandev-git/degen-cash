@@ -23,8 +23,9 @@ pub mod degen_cash {
         ctx: Context<QueueInitGlobalDCMint>,
         computation_offset: u64,
         nonce: u128,
+        deposit_mint: Pubkey,
     ) -> Result<()> {
-        venmo::queue_init_global_dc_mint(ctx, computation_offset, nonce)?;
+        venmo::queue_init_global_dc_mint(ctx, computation_offset, nonce, deposit_mint)?;
         Ok(())
     }
 

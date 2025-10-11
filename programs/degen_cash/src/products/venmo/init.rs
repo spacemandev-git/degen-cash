@@ -1,5 +1,5 @@
 // Initialize the global mint account for Degen Cash
-use crate::CIRCUITS_URL;
+use crate::{DCGlobalMint, CIRCUITS_URL, DC_GLOBAL_MINT_SEED};
 use crate::{ID, ID_CONST};
 use anchor_lang::prelude::*;
 use arcium_anchor::prelude::*;
@@ -7,6 +7,7 @@ use arcium_client::idl::arcium::types::{CircuitSource, OffChainCircuitSource};
 
 use crate::venmo::ErrorCode;
 use crate::SignerAccount;
+use arcium_client::idl::arcium::types::CallbackAccount;
 
 // Init comp def for init_global_dc_mint
 // Ix to call init_global_dc_mint
@@ -52,16 +53,26 @@ pub fn queue_init_global_dc_mint(
     ctx: Context<QueueInitGlobalDCMint>,
     computation_offset: u64,
     nonce: u128,
+    deposit_mint: Pubkey,
 ) -> Result<()> {
     ctx.accounts.sign_pda_account.bump = ctx.bumps.sign_pda_account;
+
+    ctx.accounts.dc_global_mint_account.deposit_mint = deposit_mint;
+    ctx.accounts.dc_global_mint_account.supply = [0; 32];
+    ctx.accounts.dc_global_mint_account.supply_nonce = nonce;
+
     let args = vec![Argument::PlaintextU128(nonce)];
     queue_computation(
         ctx.accounts,
         computation_offset,
         args,
         None,
-        vec![InitGlobalDcMintCallback::callback_ix(&[])],
+        vec![InitGlobalDcMintCallback::callback_ix(&[CallbackAccount {
+            pubkey: ctx.accounts.dc_global_mint_account.key(),
+            is_writable: true,
+        }])],
     )?;
+
     Ok(())
 }
 
@@ -122,6 +133,15 @@ pub struct QueueInitGlobalDCMint<'info> {
     pub clock_account: Account<'info, ClockAccount>,
     pub system_program: Program<'info, System>,
     pub arcium_program: Program<'info, Arcium>,
+    // DC Global Mint Account
+    #[account(
+        init,
+        payer = payer,
+        space = 8 + DCGlobalMint::INIT_SPACE,
+        seeds = [DC_GLOBAL_MINT_SEED.as_bytes()],
+        bump,
+    )]
+    pub dc_global_mint_account: Account<'info, DCGlobalMint>,
 }
 
 // Callback Fn
@@ -133,6 +153,8 @@ pub fn init_global_dc_mint_callback(
         ComputationOutputs::Success(InitGlobalDcMintOutput { field_0 }) => field_0,
         _ => return Err(ErrorCode::AbortedComputation.into()),
     };
+
+    ctx.accounts.dc_global_mint_account.supply = o.ciphertexts[0];
 
     emit!(InitGlobalDcMintEvent {
         encrypted_data: o.ciphertexts[0]
@@ -154,7 +176,15 @@ pub struct InitGlobalDcMintCallback<'info> {
         address = derive_comp_def_pda!(COMP_DEF_OFFSET_INIT_GLOBAL_DC_MINT)
     )]
     pub comp_def_account: Account<'info, ComputationDefinitionAccount>,
-    #[account(address = ::anchor_lang::solana_program::sysvar::instructions::ID)]
+    #[account(address = anchor_lang::solana_program::sysvar::instructions::ID)]
     /// CHECK: instructions_sysvar, checked by the account constraint
     pub instructions_sysvar: AccountInfo<'info>,
+
+    // DC Global Mint Account
+    #[account(
+        mut,
+        seeds = [DC_GLOBAL_MINT_SEED.as_bytes()],
+        bump,
+    )]
+    pub dc_global_mint_account: Account<'info, DCGlobalMint>,
 }

@@ -15,6 +15,7 @@ import {
   deserializeLE,
 } from "@arcium-hq/client";
 import { PublicKey } from "@solana/web3.js";
+import { createMint } from "@solana/spl-token";
 import * as fs from "fs";
 import * as os from "os";
 
@@ -50,6 +51,19 @@ describe("Degen Cash", () => {
       // Wait 5 seconds before queueing computation
       await new Promise((resolve) => setTimeout(resolve, 5000));
 
+      // Create mint account
+      console.log("Creating mint account");
+      const mintKeypair = anchor.web3.Keypair.generate();
+      const mint = await createMint(
+        program.provider.connection,
+        owner,
+        owner.publicKey,
+        owner.publicKey,
+        9,
+        mintKeypair
+      );
+      console.log("Mint created:", mint.toBase58());
+
       // Queue the init_global_dc_mint computation
       const computationOffset = new anchor.BN(randomBytes(8), "hex");
       const nonce = randomBytes(16);
@@ -58,8 +72,7 @@ describe("Degen Cash", () => {
 
       console.log("Queueing init_global_dc_mint computation");
       const queueSig = await program.methods
-        .queueInitGlobalDcMint(computationOffset, new anchor.BN(deserializeLE(nonce).toString())
-        )
+        .queueInitGlobalDcMint(computationOffset, new anchor.BN(deserializeLE(nonce).toString()), mint)
         .accountsPartial({
           computationAccount: getComputationAccAddress(
             program.programId,
@@ -82,6 +95,12 @@ describe("Degen Cash", () => {
 
       const event = await eventPromise;
       console.log("InitGlobalDcMintEvent received:", event);
+      const [dcGlobalMintPDA] = PublicKey.findProgramAddressSync(
+        [Buffer.from("dc_global_mint")],
+        program.programId
+      );
+      const dcGlobalMintAccount = await program.account.dcGlobalMint.fetch(dcGlobalMintPDA, "confirmed");
+      console.log("DCGlobalMint account data:", dcGlobalMintAccount);
     } catch (error) {
       console.log("Error initializing global dc mint", error);
     }
