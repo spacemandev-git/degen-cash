@@ -1,12 +1,12 @@
 # Degen Cash
 
 ## Degen Venmo
-- Init DC Global Mint
-- Create DC Token Account
+- [DONE and TESTED] Init DC Global Mint
+- [DONE] Create DC Token Account
 - Deposit
 - Transfer
 - Withdraw
-- Check Balance
+- Check Balance (only client side, not a fn)
 
 ## Degen Escrow
 - create escrow

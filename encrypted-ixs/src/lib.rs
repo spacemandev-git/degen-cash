@@ -10,4 +10,11 @@ mod circuits {
     pub fn init_global_dc_mint(input_ctxt: Enc<Mxe, InitGlobalDCMintInputValues>) -> Enc<Mxe, u64> {
         input_ctxt.owner.from_arcis(0_u64)
     }
+
+    pub struct DepositInputValues;
+
+    #[instruction]
+    pub fn deposit(input_ctxt: Enc<Shared, DepositInputValues>) -> Enc<Shared, u64> {
+        input_ctxt.owner.from_arcis(0_u64)
+    }
 }

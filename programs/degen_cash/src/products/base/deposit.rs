@@ -1,28 +1,27 @@
-// Initialize the global mint account for Degen Cash
-use crate::{DCGlobalMint, CIRCUITS_URL, DC_GLOBAL_MINT_SEED};
+// Deposit USDC to mint Degen Cash
+
+use crate::base::ErrorCode;
+use crate::{DCGlobalMint, DCUserTokenAccount, CIRCUITS_URL, DC_GLOBAL_MINT_SEED};
+use crate::{SignerAccount, DC_USER_TOKEN_ACCOUNT_SEED};
 use crate::{ID, ID_CONST};
 use anchor_lang::prelude::*;
 use arcium_anchor::prelude::*;
-use arcium_client::idl::arcium::types::{CircuitSource, OffChainCircuitSource};
+use arcium_client::idl::arcium::types::{CallbackAccount, CircuitSource, OffChainCircuitSource};
 
-use crate::venmo::ErrorCode;
-use crate::SignerAccount;
-use arcium_client::idl::arcium::types::CallbackAccount;
+// Init Comp Def
+// Queue Fn
+// Callback Fn
 
-// Init comp def for init_global_dc_mint
-// Ix to call init_global_dc_mint
-// Callback to set the global mint account
+const COMP_DEF_OFFSET_DEPOSIT: u32 = comp_def_offset("deposit");
 
-const COMP_DEF_OFFSET_INIT_GLOBAL_DC_MINT: u32 = comp_def_offset("init_global_dc_mint");
-
-// Init Comp Def Fn
-pub fn init_global_dc_mint_comp_def(ctx: Context<InitGlobalDCMintCompDef>) -> Result<()> {
+// Init Comp Def
+pub fn deposit_comp_def(ctx: Context<DepositCompDef>) -> Result<()> {
     init_comp_def(
         ctx.accounts,
         true,
         0,
         Some(CircuitSource::OffChain(OffChainCircuitSource {
-            source: format!("{}{}", CIRCUITS_URL, "init_global_dc_mint_testnet.arcis").to_string(),
+            source: format!("{}{}", CIRCUITS_URL, "deposit_testnet.arcis").to_string(),
             hash: [0; 32], // Just use zeros for now - hash verification isn't enforced yet
         })),
         None,
@@ -30,9 +29,9 @@ pub fn init_global_dc_mint_comp_def(ctx: Context<InitGlobalDCMintCompDef>) -> Re
     Ok(())
 }
 
-#[init_computation_definition_accounts("init_global_dc_mint", payer)]
+#[init_computation_definition_accounts("deposit", payer)]
 #[derive(Accounts)]
-pub struct InitGlobalDCMintCompDef<'info> {
+pub struct DepositCompDef<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
     #[account(
@@ -49,17 +48,12 @@ pub struct InitGlobalDCMintCompDef<'info> {
 }
 
 // Queue Fn
-pub fn queue_init_global_dc_mint(
-    ctx: Context<QueueInitGlobalDCMint>,
+pub fn queue_deposit(
+    ctx: Context<QueueDeposit>,
     computation_offset: u64,
     nonce: u128,
-    deposit_mint: Pubkey,
 ) -> Result<()> {
     ctx.accounts.sign_pda_account.bump = ctx.bumps.sign_pda_account;
-
-    ctx.accounts.dc_global_mint_account.deposit_mint = deposit_mint;
-    ctx.accounts.dc_global_mint_account.supply = [0; 32];
-    ctx.accounts.dc_global_mint_account.supply_nonce = nonce;
 
     let args = vec![Argument::PlaintextU128(nonce)];
     queue_computation(
@@ -67,19 +61,25 @@ pub fn queue_init_global_dc_mint(
         computation_offset,
         args,
         None,
-        vec![InitGlobalDcMintCallback::callback_ix(&[CallbackAccount {
-            pubkey: ctx.accounts.dc_global_mint_account.key(),
-            is_writable: true,
-        }])],
+        vec![DepositCallback::callback_ix(&[
+            CallbackAccount {
+                pubkey: ctx.accounts.dc_global_mint_account.key(),
+                is_writable: true,
+            },
+            CallbackAccount {
+                pubkey: ctx.accounts.dc_user_token_account.key(),
+                is_writable: true,
+            },
+        ])],
     )?;
 
     Ok(())
 }
 
-#[queue_computation_accounts("init_global_dc_mint", payer)]
+#[queue_computation_accounts("deposit", payer)]
 #[derive(Accounts)]
 #[instruction(computation_offset: u64)]
-pub struct QueueInitGlobalDCMint<'info> {
+pub struct QueueDeposit<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
     #[account(
@@ -114,7 +114,7 @@ pub struct QueueInitGlobalDCMint<'info> {
     /// CHECK: computation_account, checked by the arcium program.
     pub computation_account: UncheckedAccount<'info>,
     #[account(
-        address = derive_comp_def_pda!(COMP_DEF_OFFSET_INIT_GLOBAL_DC_MINT)
+        address = derive_comp_def_pda!(COMP_DEF_OFFSET_DEPOSIT)
     )]
     pub comp_def_account: Account<'info, ComputationDefinitionAccount>,
     #[account(
@@ -133,47 +133,42 @@ pub struct QueueInitGlobalDCMint<'info> {
     pub clock_account: Account<'info, ClockAccount>,
     pub system_program: Program<'info, System>,
     pub arcium_program: Program<'info, Arcium>,
-    // DC Global Mint Account
+    // DC Global Mint Account (read only -- used to check deposit mint key)
     #[account(
-        init,
-        payer = payer,
-        space = 8 + DCGlobalMint::INIT_SPACE,
         seeds = [DC_GLOBAL_MINT_SEED.as_bytes()],
         bump,
     )]
     pub dc_global_mint_account: Account<'info, DCGlobalMint>,
+
+    // DC User Token Account
+    #[account(
+        mut,
+        seeds = [DC_USER_TOKEN_ACCOUNT_SEED.as_bytes(), payer.key().as_ref()],
+        bump,
+    )]
+    pub dc_user_token_account: Account<'info, DCUserTokenAccount>,
 }
 
 // Callback Fn
-pub fn init_global_dc_mint_callback(
-    ctx: Context<InitGlobalDcMintCallback>,
-    output: ComputationOutputs<InitGlobalDcMintOutput>,
+// Callback Fn
+pub fn deposit_callback(
+    ctx: Context<DepositCallback>,
+    output: ComputationOutputs<DepositOutput>,
 ) -> Result<()> {
     let o = match output {
-        ComputationOutputs::Success(InitGlobalDcMintOutput { field_0 }) => field_0,
+        ComputationOutputs::Success(DepositOutput { field_0 }) => field_0,
         _ => return Err(ErrorCode::AbortedComputation.into()),
     };
-
-    ctx.accounts.dc_global_mint_account.supply = o.ciphertexts[0];
-
-    emit!(InitGlobalDcMintEvent {
-        encrypted_data: o.ciphertexts[0]
-    });
 
     Ok(())
 }
 
-#[event]
-pub struct InitGlobalDcMintEvent {
-    pub encrypted_data: [u8; 32],
-}
-
-#[callback_accounts("init_global_dc_mint")]
+#[callback_accounts("deposit")]
 #[derive(Accounts)]
-pub struct InitGlobalDcMintCallback<'info> {
+pub struct DepositCallback<'info> {
     pub arcium_program: Program<'info, Arcium>,
     #[account(
-        address = derive_comp_def_pda!(COMP_DEF_OFFSET_INIT_GLOBAL_DC_MINT)
+        address = derive_comp_def_pda!(COMP_DEF_OFFSET_DEPOSIT)
     )]
     pub comp_def_account: Account<'info, ComputationDefinitionAccount>,
     #[account(address = anchor_lang::solana_program::sysvar::instructions::ID)]
@@ -187,4 +182,9 @@ pub struct InitGlobalDcMintCallback<'info> {
         bump,
     )]
     pub dc_global_mint_account: Account<'info, DCGlobalMint>,
+
+    // DC User Token Account
+    #[account(mut)]
+    // no seeds constraint and check in queue instead (we don't have a way to pass user key to callback)
+    pub dc_user_token_account: Account<'info, DCUserTokenAccount>,
 }

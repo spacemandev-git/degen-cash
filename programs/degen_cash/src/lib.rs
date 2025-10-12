@@ -15,7 +15,7 @@ pub mod degen_cash {
 
     // Venmo
     pub fn init_global_dc_mint_comp_def(ctx: Context<InitGlobalDCMintCompDef>) -> Result<()> {
-        venmo::init_global_dc_mint_comp_def(ctx)?;
+        base::init_global_dc_mint_comp_def(ctx)?;
         Ok(())
     }
 
@@ -25,7 +25,7 @@ pub mod degen_cash {
         nonce: u128,
         deposit_mint: Pubkey,
     ) -> Result<()> {
-        venmo::queue_init_global_dc_mint(ctx, computation_offset, nonce, deposit_mint)?;
+        base::queue_init_global_dc_mint(ctx, computation_offset, nonce, deposit_mint)?;
         Ok(())
     }
 
@@ -34,7 +34,21 @@ pub mod degen_cash {
         ctx: Context<InitGlobalDcMintCallback>,
         output: ComputationOutputs<InitGlobalDcMintOutput>,
     ) -> Result<()> {
-        venmo::init_global_dc_mint_callback(ctx, output)?;
+        base::init_global_dc_mint_callback(ctx, output)?;
+        Ok(())
+    }
+
+    pub fn create_dc_token_account(ctx: Context<CreateDCTokenAccount>) -> Result<()> {
+        base::create_dc_token_account(ctx)?;
+        Ok(())
+    }
+
+    #[arcium_callback(encrypted_ix = "deposit")]
+    pub fn deposit_callback(
+        ctx: Context<DepositCallback>,
+        output: ComputationOutputs<DepositOutput>,
+    ) -> Result<()> {
+        base::deposit_callback(ctx, output)?;
         Ok(())
     }
 
