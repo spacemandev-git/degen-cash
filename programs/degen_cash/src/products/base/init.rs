@@ -1,9 +1,13 @@
 // Initialize the global mint account for Degen Cash
+// [TODO] Create Token Account PDA for DC Program to hold USDC
+
 use crate::base::ErrorCode;
 use crate::SignerAccount;
 use crate::{DCGlobalMint, CIRCUITS_URL, DC_GLOBAL_MINT_SEED};
 use crate::{ID, ID_CONST};
 use anchor_lang::prelude::*;
+use anchor_spl::associated_token::AssociatedToken;
+use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 use arcium_anchor::prelude::*;
 use arcium_client::idl::arcium::types::{CallbackAccount, CircuitSource, OffChainCircuitSource};
 
@@ -140,6 +144,17 @@ pub struct QueueInitGlobalDCMint<'info> {
         bump,
     )]
     pub dc_global_mint_account: Account<'info, DCGlobalMint>,
+    // DC ATA
+    #[account(
+        init,
+        payer = payer,
+        associated_token::mint = deposit_mint,
+        associated_token::authority = dc_global_mint_account,
+    )]
+    pub deposit_ata: InterfaceAccount<'info, TokenAccount>,
+    pub deposit_mint: InterfaceAccount<'info, Mint>,
+    pub token_program: Interface<'info, TokenInterface>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
 // Callback Fn

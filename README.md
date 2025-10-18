@@ -1,7 +1,8 @@
 # Degen Cash
 
 ## Degen Venmo
-- [DONE and TESTED] Init DC Global Mint
+- [DONE] Init DC Global Mint
+    - [TODO] Create Token Account PDA to hold USDC funds in Init ix
 - [DONE] Create DC Token Account
 - Deposit
 - Transfer

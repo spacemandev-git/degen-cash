@@ -99,6 +99,7 @@ describe("Degen Cash", () => {
         [Buffer.from("dc_global_mint")],
         program.programId
       );
+      //await new Promise((resolve) => setTimeout(resolve, 1000));
       const dcGlobalMintAccount = await program.account.dcGlobalMint.fetch(dcGlobalMintPDA, "confirmed");
       console.log("DCGlobalMint account data:", dcGlobalMintAccount);
     } catch (error) {
