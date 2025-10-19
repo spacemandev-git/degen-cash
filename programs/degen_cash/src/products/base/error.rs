@@ -6,4 +6,6 @@ pub enum ErrorCode {
     AbortedComputation,
     #[msg("Cluster not set")]
     ClusterNotSet,
+    #[msg("Deposit Invalid")]
+    DepositInvalid,
 }

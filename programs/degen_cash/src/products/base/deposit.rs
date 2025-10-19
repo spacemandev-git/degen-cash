@@ -5,6 +5,9 @@ use crate::{DCGlobalMint, DCUserTokenAccount, CIRCUITS_URL, DC_GLOBAL_MINT_SEED}
 use crate::{SignerAccount, DC_USER_TOKEN_ACCOUNT_SEED};
 use crate::{ID, ID_CONST};
 use anchor_lang::prelude::*;
+use anchor_spl::associated_token::AssociatedToken;
+use anchor_spl::token::{transfer, Transfer};
+use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 use arcium_anchor::prelude::*;
 use arcium_client::idl::arcium::types::{CallbackAccount, CircuitSource, OffChainCircuitSource};
 
@@ -51,11 +54,38 @@ pub struct DepositCompDef<'info> {
 pub fn queue_deposit(
     ctx: Context<QueueDeposit>,
     computation_offset: u64,
-    nonce: u128,
+    deposit_amount: u64,
 ) -> Result<()> {
     ctx.accounts.sign_pda_account.bump = ctx.bumps.sign_pda_account;
 
-    let args = vec![Argument::PlaintextU128(nonce)];
+    // Transfer Deposit into DC Global ATA
+    transfer(
+        CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.from_ata.to_account_info(),
+                to: ctx.accounts.deposit_ata.to_account_info(),
+                authority: ctx.accounts.payer.to_account_info(),
+            },
+        ),
+        deposit_amount,
+    )?;
+
+    // Send Deposit Amount and Account Slice to Queue Deposit
+    // In [callback], update the Account with the new <encrypted> amount
+
+    let args = vec![
+        // Global Mint Amount
+        Argument::PlaintextU128(ctx.accounts.dc_global_mint_account.supply_nonce),
+        Argument::Account(ctx.accounts.dc_global_mint_account.key(), 8 + 32, 32),
+        // User DC Balance
+        Argument::ArcisPubkey(ctx.accounts.payer.key().to_bytes()),
+        Argument::PlaintextU128(ctx.accounts.dc_user_token_account.amount_nonce),
+        Argument::Account(ctx.accounts.dc_user_token_account.key(), 8 + 32, 32),
+        // Unecrypted Additional Deposit Amount
+        Argument::PlaintextU64(deposit_amount),
+    ];
+
     queue_computation(
         ctx.accounts,
         computation_offset,
@@ -69,6 +99,30 @@ pub fn queue_deposit(
             CallbackAccount {
                 pubkey: ctx.accounts.dc_user_token_account.key(),
                 is_writable: true,
+            },
+            CallbackAccount {
+                pubkey: ctx.accounts.payer.key(),
+                is_writable: false,
+            },
+            CallbackAccount {
+                pubkey: ctx.accounts.from_ata.key(),
+                is_writable: true,
+            },
+            CallbackAccount {
+                pubkey: ctx.accounts.deposit_ata.key(),
+                is_writable: true,
+            },
+            CallbackAccount {
+                pubkey: ctx.accounts.deposit_mint.key(),
+                is_writable: false,
+            },
+            CallbackAccount {
+                pubkey: ctx.accounts.token_program.key(),
+                is_writable: false,
+            },
+            CallbackAccount {
+                pubkey: ctx.accounts.associated_token_program.key(),
+                is_writable: false,
             },
         ])],
     )?;
@@ -147,6 +201,25 @@ pub struct QueueDeposit<'info> {
         bump,
     )]
     pub dc_user_token_account: Account<'info, DCUserTokenAccount>,
+
+    // Deposit DC ATA
+    #[account(
+        mut,
+        associated_token::mint = deposit_mint,
+        associated_token::authority = dc_global_mint_account,
+    )]
+    pub deposit_ata: InterfaceAccount<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        associated_token::mint = deposit_mint,
+        associated_token::authority = payer,
+    )]
+    pub from_ata: InterfaceAccount<'info, TokenAccount>,
+
+    pub deposit_mint: InterfaceAccount<'info, Mint>,
+    pub token_program: Interface<'info, TokenInterface>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
 // Callback Fn
@@ -156,9 +229,45 @@ pub fn deposit_callback(
     output: ComputationOutputs<DepositOutput>,
 ) -> Result<()> {
     let o = match output {
-        ComputationOutputs::Success(DepositOutput { field_0 }) => field_0,
+        ComputationOutputs::Success(DepositOutput {
+            field_0:
+                DepositOutputStruct0 {
+                    field_0: status_code,
+                    field_1: deposit_amount,
+                    field_2: new_global_mint_amount,
+                    field_3: new_user_dc_balance,
+                },
+        }) => (
+            status_code,
+            deposit_amount,
+            new_global_mint_amount,
+            new_user_dc_balance,
+        ),
         _ => return Err(ErrorCode::AbortedComputation.into()),
     };
+
+    if o.1 != 0 {
+        // Return Depositted Funds to User
+
+        transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.dc_deposit_ata.to_account_info(),
+                    to: ctx.accounts.user_ata.to_account_info(),
+                    authority: ctx.accounts.user_signer.to_account_info(),
+                },
+            ),
+            o.1,
+        )?;
+        return Err(ErrorCode::DepositInvalid.into());
+    }
+
+    // Update DC User Token Account & Global Mint Account
+    ctx.accounts.dc_global_mint_account.supply = o.2.ciphertexts[0];
+    ctx.accounts.dc_global_mint_account.supply_nonce = o.2.nonce;
+    ctx.accounts.dc_user_token_account.amount = o.3.ciphertexts[0];
+    ctx.accounts.dc_user_token_account.amount_nonce = o.3.nonce;
 
     Ok(())
 }
@@ -187,4 +296,29 @@ pub struct DepositCallback<'info> {
     #[account(mut)]
     // no seeds constraint and check in queue instead (we don't have a way to pass user key to callback)
     pub dc_user_token_account: Account<'info, DCUserTokenAccount>,
+
+    // User Signer (not writable, used to derive ATA)
+    /// CHECK: user_signer, trust Arcium to send us the right account based on queue ix
+    pub user_signer: AccountInfo<'info>,
+
+    // User ATA
+    #[account(
+        mut,
+        associated_token::mint = dc_global_mint_account.deposit_mint,
+        associated_token::authority = user_signer,
+    )]
+    pub user_ata: InterfaceAccount<'info, TokenAccount>,
+
+    // DC Deposit ATA
+    #[account(
+        mut,
+        associated_token::mint = dc_global_mint_account.deposit_mint,
+        associated_token::authority = dc_global_mint_account,
+    )]
+    pub dc_deposit_ata: InterfaceAccount<'info, TokenAccount>,
+
+    // Read Only Accounts
+    pub deposit_mint: InterfaceAccount<'info, Mint>,
+    pub token_program: Interface<'info, TokenInterface>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
 }
