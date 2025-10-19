@@ -14,6 +14,8 @@ import {
   getComputationAccAddress,
   deserializeLE,
   x25519,
+  getMXEPublicKey,
+  RescueCipher,
 } from "@arcium-hq/client";
 import { PublicKey } from "@solana/web3.js";
 import { createMint, getOrCreateAssociatedTokenAccount, mintTo, TOKEN_PROGRAM_ID } from "@solana/spl-token";
@@ -53,7 +55,7 @@ describe("Degen Cash", () => {
         owner,
         owner.publicKey,
         owner.publicKey,
-        9,
+        6,
         depositMintKeypair
       );
       console.log("Deposit mint created:", depositMint.toBase58());
@@ -93,7 +95,7 @@ describe("Degen Cash", () => {
         depositMint,
         user1Ata.address,
         owner,
-        10_000_000_000_000
+        10_000_000_000
       );
 
       console.log("Creating ATA and minting 10k tokens to user 2");
@@ -109,7 +111,7 @@ describe("Degen Cash", () => {
         depositMint,
         user2Ata.address,
         owner,
-        10_000_000_000_000
+        10_000_000_000
       );
 
       // Initialize computation definitions
@@ -221,6 +223,23 @@ describe("Degen Cash", () => {
 
         const dcUser1Account1 = await program.account.dcUserTokenAccount.fetch(dcUser1TokenAccount, "confirmed");
         console.log("User 1 DC token account after creation:", dcUser1Account1);
+
+        // Decrypt and print balance
+        const mxePublicKey = await getMXEPublicKey(
+          program.provider as anchor.AnchorProvider,
+          program.programId
+        );
+        const sharedSecret = x25519.getSharedSecret(x25519PrivateKey, mxePublicKey);
+        const cipher = new RescueCipher(sharedSecret);
+        
+        // Convert nonce (u128) to 16-byte array
+        const nonce1Bytes = new anchor.BN(dcUser1Account1.amountNonce.toString()).toArrayLike(Buffer, "le", 16);
+        
+        const decryptedBalance1 = cipher.decrypt(
+          [dcUser1Account1.amount],
+          nonce1Bytes
+        );
+        console.log("Decrypted balance after creation:", decryptedBalance1.toString());
       } catch (error) {
         console.log("Error creating DC token account:", error);
       }
@@ -229,7 +248,7 @@ describe("Degen Cash", () => {
       try {
         console.log("\n=== Depositing 1k tokens from User 1 ===");
         const depositComputationOffset = new anchor.BN(randomBytes(8), "hex");
-        const depositAmount = new anchor.BN(1_000_000_000_000);
+        const depositAmount = new anchor.BN(1_000_000_000);
 
         const [dcUser1TokenAccount] = PublicKey.findProgramAddressSync(
           [Buffer.from("dc_user_token_account"), user1.publicKey.toBuffer()],
@@ -280,6 +299,24 @@ describe("Degen Cash", () => {
 
         const dcUser1Account2 = await program.account.dcUserTokenAccount.fetch(dcUser1TokenAccount, "confirmed");
         console.log("User 1 DC token account after deposit:", dcUser1Account2);
+
+        // Decrypt and print balance after deposit
+        const mxePublicKey = await getMXEPublicKey(
+          program.provider as anchor.AnchorProvider,
+          program.programId
+        );
+        const sharedSecret = x25519.getSharedSecret(x25519PrivateKey, mxePublicKey);
+        const cipher = new RescueCipher(sharedSecret);
+        
+        // Convert nonce (u128) to 16-byte array
+        const nonce2Bytes = new anchor.BN(dcUser1Account2.amountNonce.toString()).toArrayLike(Buffer, "le", 16);
+        
+        const decryptedBalance2 = cipher.decrypt(
+          [dcUser1Account2.amount],
+          nonce2Bytes
+        );
+        console.log("Decrypted balance after deposit:", decryptedBalance2.toString());
+        console.log("Expected balance after 1k deposit:", "1000000000");
       } catch (error) {
         console.log("Error depositing:", error);
       }

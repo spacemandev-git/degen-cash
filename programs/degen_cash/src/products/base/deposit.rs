@@ -261,7 +261,7 @@ pub fn deposit_callback(
         new_user_dc_balance: o.3.ciphertexts[0],
     });
 
-    if o.1 != 0 {
+    if o.0 != 0 {
         // Return Depositted Funds to User
 
         let dc_global_mint_account_signer_seeds = &[
