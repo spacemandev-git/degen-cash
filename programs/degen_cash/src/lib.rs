@@ -43,6 +43,15 @@ pub mod degen_cash {
         Ok(())
     }
 
+    pub fn queue_deposit(
+        ctx: Context<QueueDeposit>,
+        computation_offset: u64,
+        deposit_amount: u64,
+    ) -> Result<()> {
+        base::queue_deposit(ctx, computation_offset, deposit_amount)?;
+        Ok(())
+    }
+
     #[arcium_callback(encrypted_ix = "deposit")]
     pub fn deposit_callback(
         ctx: Context<DepositCallback>,
