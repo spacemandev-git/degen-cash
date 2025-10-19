@@ -4,11 +4,16 @@ use arcis_imports::*;
 mod circuits {
     use arcis_imports::*;
 
-    pub struct InitGlobalDCMintInputValues;
+    pub struct EmptyStruct;
 
     #[instruction]
-    pub fn init_global_dc_mint(input_ctxt: Enc<Mxe, InitGlobalDCMintInputValues>) -> Enc<Mxe, u64> {
+    pub fn init_global_dc_mint(input_ctxt: Enc<Mxe, EmptyStruct>) -> Enc<Mxe, u64> {
         input_ctxt.owner.from_arcis(0_u64)
+    }
+
+    #[instruction]
+    pub fn init_user_dc_balance(owner_ctxt: Enc<Shared, EmptyStruct>) -> Enc<Shared, u64> {
+        owner_ctxt.owner.from_arcis(0_u64)
     }
 
     /**

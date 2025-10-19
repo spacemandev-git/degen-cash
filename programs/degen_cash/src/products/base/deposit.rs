@@ -18,7 +18,7 @@ use arcium_client::idl::arcium::types::{CallbackAccount, CircuitSource, OffChain
 const COMP_DEF_OFFSET_DEPOSIT: u32 = comp_def_offset("deposit");
 
 // Init Comp Def
-pub fn deposit_comp_def(ctx: Context<DepositCompDef>) -> Result<()> {
+pub fn init_deposit_comp_def(ctx: Context<InitDepositCompDef>) -> Result<()> {
     init_comp_def(
         ctx.accounts,
         true,
@@ -34,7 +34,7 @@ pub fn deposit_comp_def(ctx: Context<DepositCompDef>) -> Result<()> {
 
 #[init_computation_definition_accounts("deposit", payer)]
 #[derive(Accounts)]
-pub struct DepositCompDef<'info> {
+pub struct InitDepositCompDef<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
     #[account(
@@ -55,6 +55,7 @@ pub fn queue_deposit(
     ctx: Context<QueueDeposit>,
     computation_offset: u64,
     deposit_amount: u64,
+    user_x25519: [u8; 32],
 ) -> Result<()> {
     ctx.accounts.sign_pda_account.bump = ctx.bumps.sign_pda_account;
 
@@ -79,7 +80,7 @@ pub fn queue_deposit(
         Argument::PlaintextU128(ctx.accounts.dc_global_mint_account.supply_nonce),
         Argument::Account(ctx.accounts.dc_global_mint_account.key(), 8 + 32, 32),
         // User DC Balance
-        Argument::ArcisPubkey(ctx.accounts.payer.key().to_bytes()),
+        Argument::ArcisPubkey(user_x25519),
         Argument::PlaintextU128(ctx.accounts.dc_user_token_account.amount_nonce),
         Argument::Account(ctx.accounts.dc_user_token_account.key(), 8 + 32, 32),
         // Unecrypted Additional Deposit Amount
@@ -222,7 +223,14 @@ pub struct QueueDeposit<'info> {
     pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
-// Callback Fn
+#[event]
+pub struct DepositEvent {
+    pub status_code: u8,
+    pub deposit_amount: u64,
+    pub new_global_mint_amount: [u8; 32],
+    pub new_user_dc_balance: [u8; 32],
+}
+
 // Callback Fn
 pub fn deposit_callback(
     ctx: Context<DepositCallback>,
@@ -246,21 +254,35 @@ pub fn deposit_callback(
         _ => return Err(ErrorCode::AbortedComputation.into()),
     };
 
+    emit!(DepositEvent {
+        status_code: o.0,
+        deposit_amount: o.1,
+        new_global_mint_amount: o.2.ciphertexts[0],
+        new_user_dc_balance: o.3.ciphertexts[0],
+    });
+
     if o.1 != 0 {
         // Return Depositted Funds to User
 
+        let dc_global_mint_account_signer_seeds = &[
+            DC_GLOBAL_MINT_SEED.as_bytes(),
+            &[ctx.bumps.dc_global_mint_account],
+        ];
+
         transfer(
-            CpiContext::new(
+            CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
                 Transfer {
                     from: ctx.accounts.dc_deposit_ata.to_account_info(),
                     to: ctx.accounts.user_ata.to_account_info(),
-                    authority: ctx.accounts.user_signer.to_account_info(),
+                    authority: ctx.accounts.dc_global_mint_account.to_account_info(),
                 },
+                &[dc_global_mint_account_signer_seeds],
             ),
             o.1,
         )?;
-        return Err(ErrorCode::DepositInvalid.into());
+        // CAN NEVER ERROR IN CALLBACK!!! // Keep values as they are
+        return Ok(());
     }
 
     // Update DC User Token Account & Global Mint Account

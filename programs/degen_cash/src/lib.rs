@@ -38,8 +38,34 @@ pub mod degen_cash {
         Ok(())
     }
 
-    pub fn create_dc_token_account(ctx: Context<CreateDCTokenAccount>) -> Result<()> {
-        base::create_dc_token_account(ctx)?;
+    pub fn init_create_dc_token_account_comp_def(
+        ctx: Context<InitCreateDCTokenAccountCompDef>,
+    ) -> Result<()> {
+        base::init_create_dc_token_account_comp_def(ctx)?;
+        Ok(())
+    }
+
+    pub fn queue_create_dc_token_account(
+        ctx: Context<QueueInitUserDcBalance>,
+        computation_offset: u64,
+        owner_x25519: [u8; 32],
+        nonce: u128,
+    ) -> Result<()> {
+        base::queue_create_dc_token_account(ctx, computation_offset, owner_x25519, nonce)?;
+        Ok(())
+    }
+
+    #[arcium_callback(encrypted_ix = "init_user_dc_balance")]
+    pub fn init_user_dc_balance_callback(
+        ctx: Context<InitUserDcBalanceCallback>,
+        output: ComputationOutputs<InitUserDcBalanceOutput>,
+    ) -> Result<()> {
+        base::init_user_dc_balance_callback(ctx, output)?;
+        Ok(())
+    }
+
+    pub fn init_deposit_comp_def(ctx: Context<InitDepositCompDef>) -> Result<()> {
+        base::init_deposit_comp_def(ctx)?;
         Ok(())
     }
 
@@ -47,8 +73,9 @@ pub mod degen_cash {
         ctx: Context<QueueDeposit>,
         computation_offset: u64,
         deposit_amount: u64,
+        user_x25519: [u8; 32],
     ) -> Result<()> {
-        base::queue_deposit(ctx, computation_offset, deposit_amount)?;
+        base::queue_deposit(ctx, computation_offset, deposit_amount, user_x25519)?;
         Ok(())
     }
 
