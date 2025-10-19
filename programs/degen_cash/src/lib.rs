@@ -88,6 +88,25 @@ pub mod degen_cash {
         Ok(())
     }
 
+    pub fn init_transfer_comp_def(ctx: Context<InitTransferCompDef>) -> Result<()> {
+        base::init_transfer_comp_def(ctx)?;
+        Ok(())
+    }
+
+    pub fn queue_transfer(ctx: Context<QueueTransfer>, computation_offset: u64) -> Result<()> {
+        base::queue_transfer(ctx, computation_offset)?;
+        Ok(())
+    }
+
+    #[arcium_callback(encrypted_ix = "transfer")]
+    pub fn transfer_callback(
+        ctx: Context<TransferCallback>,
+        output: ComputationOutputs<TransferOutput>,
+    ) -> Result<()> {
+        base::transfer_callback(ctx, output)?;
+        Ok(())
+    }
+
     // Escrow
 
     // Lottery

@@ -3,12 +3,10 @@
 use crate::base::ErrorCode;
 use crate::DCUserTokenAccount;
 use crate::SignerAccount;
+use crate::CIRCUITS_URL;
 use crate::DC_USER_TOKEN_ACCOUNT_SEED;
-use crate::{DCGlobalMint, CIRCUITS_URL, DC_GLOBAL_MINT_SEED};
 use crate::{ID, ID_CONST};
 use anchor_lang::prelude::*;
-use anchor_spl::associated_token::AssociatedToken;
-use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 use arcium_anchor::prelude::*;
 use arcium_client::idl::arcium::types::{CallbackAccount, CircuitSource, OffChainCircuitSource};
 

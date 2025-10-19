@@ -2,12 +2,11 @@
 
 ## Degen Venmo
 - [DONE] Init DC Global Mint
-    - [TODO] Create Token Account PDA to hold USDC funds in Init ix
 - [DONE] Create DC Token Account
-- Deposit
+- [DONE] Deposit
 - Transfer
 - Withdraw
-- Check Balance (only client side, not a fn)
+- [DONE] Check Balance (only client side, not a fn)
 
 ## Degen Escrow
 - create escrow

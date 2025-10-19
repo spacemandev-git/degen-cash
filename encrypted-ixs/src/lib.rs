@@ -52,4 +52,9 @@ mod circuits {
             user_dc_balance_ctxt.owner.from_arcis(new_user_dc_balance),
         )
     }
+
+    #[instruction]
+    pub fn transfer() -> () {
+        ()
+    }
 }
