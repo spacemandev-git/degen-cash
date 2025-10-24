@@ -55,7 +55,6 @@ pub fn queue_deposit(
     ctx: Context<QueueDeposit>,
     computation_offset: u64,
     deposit_amount: u64,
-    user_x25519: [u8; 32],
 ) -> Result<()> {
     ctx.accounts.sign_pda_account.bump = ctx.bumps.sign_pda_account;
 
@@ -80,7 +79,7 @@ pub fn queue_deposit(
         Argument::PlaintextU128(ctx.accounts.dc_global_mint_account.supply_nonce),
         Argument::Account(ctx.accounts.dc_global_mint_account.key(), 8 + 32, 32),
         // User DC Balance
-        Argument::ArcisPubkey(user_x25519),
+        Argument::ArcisPubkey(ctx.accounts.dc_user_token_account.owner_x25519),
         Argument::PlaintextU128(ctx.accounts.dc_user_token_account.amount_nonce),
         Argument::Account(ctx.accounts.dc_user_token_account.key(), 8 + 32, 32),
         // Unecrypted Additional Deposit Amount

@@ -168,6 +168,7 @@ pub fn init_global_dc_mint_callback(
     };
 
     ctx.accounts.dc_global_mint_account.supply = o.ciphertexts[0];
+    ctx.accounts.dc_global_mint_account.supply_nonce = o.nonce;
 
     emit!(InitGlobalDcMintEvent {
         encrypted_data: o.ciphertexts[0]

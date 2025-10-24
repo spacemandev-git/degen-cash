@@ -12,6 +12,7 @@ pub struct DCGlobalMint {
 #[derive(InitSpace)]
 pub struct DCUserTokenAccount {
     pub owner: Pubkey,
+    pub owner_x25519: [u8; 32],
     pub amount: [u8; 32],
     pub amount_nonce: u128,
 }

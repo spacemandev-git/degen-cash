@@ -63,8 +63,10 @@ pub fn queue_create_dc_token_account(
     ctx.accounts.dc_user_token_account.owner = ctx.accounts.payer.key();
     ctx.accounts.dc_user_token_account.amount = [0; 32];
     ctx.accounts.dc_user_token_account.amount_nonce = 0;
+    ctx.accounts.dc_user_token_account.owner_x25519 = owner_x25519;
 
     let args = vec![
+        // Enc<Shared, {}> // Used to set 0 with nonce
         Argument::ArcisPubkey(owner_x25519),
         Argument::PlaintextU128(nonce),
     ];
