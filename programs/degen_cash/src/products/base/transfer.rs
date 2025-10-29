@@ -52,17 +52,66 @@ pub struct InitTransferCompDef<'info> {
 }
 
 // Queue Fn
-pub fn queue_transfer(ctx: Context<QueueTransfer>, computation_offset: u64) -> Result<()> {
+pub fn queue_transfer(
+    ctx: Context<QueueTransfer>,
+    computation_offset: u64,
+    transfer_amount: u64,
+    max_variance: u8,
+    _reciever_pubkey: Pubkey, // used in constraints
+) -> Result<()> {
     ctx.accounts.sign_pda_account.bump = ctx.bumps.sign_pda_account;
 
-    let args = vec![];
+    if (transfer_amount > 1000_000000) {
+        return Err(ErrorCode::MaxTransferAmountExceeded.into());
+    }
+
+    let args = vec![
+        // Global Reserves Balance (u64)
+        Argument::Account(
+            ctx.accounts.dc_global_mint_account.deposit_mint.key(),
+            36,
+            8,
+        ),
+        // Global DC Balance (Enc<Mxe, u64>)
+        Argument::PlaintextU128(ctx.accounts.dc_global_mint_account.supply_nonce),
+        Argument::Account(ctx.accounts.dc_global_mint_account.key(), 8 + 32, 32),
+        // Sender Balance (Enc<Shared, u64>)
+        Argument::ArcisPubkey(ctx.accounts.dc_user_token_account.owner_x25519),
+        Argument::PlaintextU128(ctx.accounts.dc_user_token_account.amount_nonce),
+        Argument::Account(ctx.accounts.dc_user_token_account.key(), 8 + 32 + 32, 32),
+        // Receiver Balance (Enc<Shared, u64>)
+        Argument::ArcisPubkey(ctx.accounts.receiver_dc_user_token_account.owner_x25519),
+        Argument::PlaintextU128(ctx.accounts.receiver_dc_user_token_account.amount_nonce),
+        Argument::Account(
+            ctx.accounts.receiver_dc_user_token_account.key(),
+            8 + 32 + 32,
+            32,
+        ),
+        // Transfer Amount (u64)
+        Argument::PlaintextU64(transfer_amount),
+        // Max Variance (u8) (0 - 255) important it's full range otherwise we have modulo bias
+        Argument::PlaintextU8(max_variance),
+    ];
 
     queue_computation(
         ctx.accounts,
         computation_offset,
         args,
         None,
-        vec![TransferCallback::callback_ix(&[])],
+        vec![TransferCallback::callback_ix(&[
+            CallbackAccount {
+                pubkey: ctx.accounts.dc_global_mint_account.key(),
+                is_writable: true,
+            },
+            CallbackAccount {
+                pubkey: ctx.accounts.dc_user_token_account.key(),
+                is_writable: true,
+            },
+            CallbackAccount {
+                pubkey: ctx.accounts.receiver_dc_user_token_account.key(),
+                is_writable: true,
+            },
+        ])],
     )?;
 
     Ok(())
@@ -70,7 +119,7 @@ pub fn queue_transfer(ctx: Context<QueueTransfer>, computation_offset: u64) -> R
 
 #[queue_computation_accounts("transfer", payer)]
 #[derive(Accounts)]
-#[instruction(computation_offset: u64)]
+#[instruction(computation_offset: u64, transfer_amount: u64, max_variance: u8, _reciever_pubkey: Pubkey)]
 pub struct QueueTransfer<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -125,6 +174,31 @@ pub struct QueueTransfer<'info> {
     pub clock_account: Account<'info, ClockAccount>,
     pub system_program: Program<'info, System>,
     pub arcium_program: Program<'info, Arcium>,
+    // Custom Accounts
+    pub dc_global_mint_account: Account<'info, DCGlobalMint>,
+    // DC User Token Account
+    #[account(
+        seeds = [DC_USER_TOKEN_ACCOUNT_SEED.as_bytes(), payer.key().as_ref()],
+        bump,
+    )]
+    pub dc_user_token_account: Account<'info, DCUserTokenAccount>,
+    // Receiver DC User Token Account
+    #[account(
+        seeds = [DC_USER_TOKEN_ACCOUNT_SEED.as_bytes(), _reciever_pubkey.as_ref()],
+        bump,
+    )]
+    pub receiver_dc_user_token_account: Account<'info, DCUserTokenAccount>,
+}
+
+#[event]
+pub struct TransferEvent {
+    pub status_code: u8,
+    pub variance: u8,
+    pub transfer_amount: u64,
+    pub cost_to_sender: [u8; 32],
+    pub new_sender_balance: [u8; 32],
+    pub new_global_mint_balance: [u8; 32],
+    pub new_receiver_balance: [u8; 32],
 }
 
 pub fn transfer_callback(
@@ -132,9 +206,46 @@ pub fn transfer_callback(
     output: ComputationOutputs<TransferOutput>,
 ) -> Result<()> {
     let o = match output {
-        ComputationOutputs::Success(TransferOutput { field_0 }) => field_0,
+        ComputationOutputs::Success(TransferOutput {
+            field_0:
+                TransferOutputStruct0 {
+                    field_0: status_code,
+                    field_1: variance,
+                    field_2: transfer_amount,
+                    field_3: sender_event,
+                    field_4: new_global_mint_balance,
+                    field_5: new_receiver_balance,
+                },
+        }) => (
+            status_code,
+            variance,
+            transfer_amount,
+            sender_event,
+            new_global_mint_balance,
+            new_receiver_balance,
+        ),
         _ => return Err(ErrorCode::AbortedComputation.into()),
     };
+
+    emit!(TransferEvent {
+        status_code: o.0,
+        variance: o.1,
+        transfer_amount: o.2,
+        cost_to_sender: o.3.ciphertexts[0],
+        new_sender_balance: o.3.ciphertexts[1],
+        new_global_mint_balance: o.4.ciphertexts[0],
+        new_receiver_balance: o.5.ciphertexts[0],
+    });
+
+    if o.0 == 0 {
+        // Update accounts if everything is successful
+        ctx.accounts.dc_global_mint_account.supply = o.4.ciphertexts[0];
+        ctx.accounts.dc_global_mint_account.supply_nonce = o.4.nonce;
+        ctx.accounts.dc_user_token_account.amount = o.3.ciphertexts[1];
+        ctx.accounts.dc_user_token_account.amount_nonce = o.3.nonce;
+        ctx.accounts.receiver_dc_user_token_account.amount = o.5.ciphertexts[0];
+        ctx.accounts.receiver_dc_user_token_account.amount_nonce = o.5.nonce;
+    }
 
     Ok(())
 }
@@ -151,4 +262,17 @@ pub struct TransferCallback<'info> {
     #[account(address = anchor_lang::solana_program::sysvar::instructions::ID)]
     /// CHECK: instructions_sysvar, checked by the account constraint
     pub instructions_sysvar: AccountInfo<'info>,
+    // DC Global Mint Account
+    #[account(
+        mut,
+        seeds = [DC_GLOBAL_MINT_SEED.as_bytes()],
+        bump,
+    )]
+    pub dc_global_mint_account: Account<'info, DCGlobalMint>,
+    // DC User Token Account
+    #[account(mut)]
+    pub dc_user_token_account: Account<'info, DCUserTokenAccount>,
+    // Receiver DC User Token Account
+    #[account(mut)]
+    pub receiver_dc_user_token_account: Account<'info, DCUserTokenAccount>,
 }

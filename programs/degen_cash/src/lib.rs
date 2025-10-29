@@ -73,9 +73,8 @@ pub mod degen_cash {
         ctx: Context<QueueDeposit>,
         computation_offset: u64,
         deposit_amount: u64,
-        user_x25519: [u8; 32],
     ) -> Result<()> {
-        base::queue_deposit(ctx, computation_offset, deposit_amount, user_x25519)?;
+        base::queue_deposit(ctx, computation_offset, deposit_amount)?;
         Ok(())
     }
 
@@ -93,8 +92,20 @@ pub mod degen_cash {
         Ok(())
     }
 
-    pub fn queue_transfer(ctx: Context<QueueTransfer>, computation_offset: u64) -> Result<()> {
-        base::queue_transfer(ctx, computation_offset)?;
+    pub fn queue_transfer(
+        ctx: Context<QueueTransfer>,
+        computation_offset: u64,
+        transfer_amount: u64,
+        max_variance: u8,
+        _reciever_pubkey: Pubkey,
+    ) -> Result<()> {
+        base::queue_transfer(
+            ctx,
+            computation_offset,
+            transfer_amount,
+            max_variance,
+            _reciever_pubkey,
+        )?;
         Ok(())
     }
 

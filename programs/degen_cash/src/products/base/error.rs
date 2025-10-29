@@ -8,4 +8,6 @@ pub enum ErrorCode {
     ClusterNotSet,
     #[msg("Deposit Invalid")]
     DepositInvalid,
+    #[msg("Max Transfer Amount Exceeded")]
+    MaxTransferAmountExceeded,
 }

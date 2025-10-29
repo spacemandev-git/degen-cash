@@ -81,7 +81,7 @@ pub fn queue_deposit(
         // User DC Balance
         Argument::ArcisPubkey(ctx.accounts.dc_user_token_account.owner_x25519),
         Argument::PlaintextU128(ctx.accounts.dc_user_token_account.amount_nonce),
-        Argument::Account(ctx.accounts.dc_user_token_account.key(), 8 + 32, 32),
+        Argument::Account(ctx.accounts.dc_user_token_account.key(), 8 + 32 + 32, 32),
         // Unecrypted Additional Deposit Amount
         Argument::PlaintextU64(deposit_amount),
     ];
