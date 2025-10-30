@@ -53,6 +53,52 @@ mod circuits {
         )
     }
 
+    /**
+     * Status Codes:
+     * 0: Success
+     * 1: Math Overflow
+     * 2: Insufficient Funds
+     */
+    #[instruction]
+    pub fn withdraw(
+        global_mint_amount_ctxt: Enc<Mxe, u64>,
+        user_dc_balance_ctxt: Enc<Shared, u64>,
+        withdraw_amount: u64,
+    ) -> (u8, u64, Enc<Mxe, u64>, Enc<Shared, u64>) {
+        let global_mint_amount = global_mint_amount_ctxt.to_arcis();
+        let user_dc_balance = user_dc_balance_ctxt.to_arcis();
+
+        let mut status_code = 0_u8;
+
+        if withdraw_amount > user_dc_balance {
+            status_code = 2; // Insufficient Funds
+        }
+
+        if withdraw_amount > global_mint_amount {
+            status_code = 2; // Insufficient Funds
+        }
+
+        let new_global_mint_amount = global_mint_amount - withdraw_amount;
+        let new_user_dc_balance = user_dc_balance - withdraw_amount;
+
+        if new_global_mint_amount > global_mint_amount {
+            status_code = 1; // Math Overflow
+        }
+
+        if new_user_dc_balance > user_dc_balance {
+            status_code = 1; // Math Overflow
+        }
+
+        (
+            status_code.reveal(),
+            withdraw_amount.reveal(),
+            global_mint_amount_ctxt
+                .owner
+                .from_arcis(new_global_mint_amount),
+            user_dc_balance_ctxt.owner.from_arcis(new_user_dc_balance),
+        )
+    }
+
     pub struct SenderTransferEvent {
         pub cost_to_sender: u64,
         pub new_sender_balance: u64,
@@ -66,7 +112,7 @@ mod circuits {
      */
     #[instruction]
     pub fn transfer(
-        global_reserves_balance: u64, // Used to calculate NAV
+        global_balance: u64, // Used to calculate NAV
         global_dc_balance_ctxt: Enc<Mxe, u64>,
         sender_balance_ctxt: Enc<Shared, u64>,
         receiver_balance_ctxt: Enc<Shared, u64>,
@@ -82,6 +128,7 @@ mod circuits {
     ) {
         // Returnables
         let mut status_code = 0_u8;
+        let global_reserves_balance = global_balance; // todo change with bytes conversion from account read later
         let mut global_dc_balance = global_dc_balance_ctxt.to_arcis();
         let mut sender_balance = sender_balance_ctxt.to_arcis();
         let mut receiver_balance = receiver_balance_ctxt.to_arcis();

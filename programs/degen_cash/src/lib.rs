@@ -118,6 +118,29 @@ pub mod degen_cash {
         Ok(())
     }
 
+    pub fn init_withdraw_comp_def(ctx: Context<InitWithdrawCompDef>) -> Result<()> {
+        base::init_withdraw_comp_def(ctx)?;
+        Ok(())
+    }
+
+    pub fn queue_withdraw(
+        ctx: Context<QueueWithdraw>,
+        computation_offset: u64,
+        withdraw_amount: u64,
+    ) -> Result<()> {
+        base::queue_withdraw(ctx, computation_offset, withdraw_amount)?;
+        Ok(())
+    }
+
+    #[arcium_callback(encrypted_ix = "withdraw")]
+    pub fn withdraw_callback(
+        ctx: Context<WithdrawCallback>,
+        output: ComputationOutputs<WithdrawOutput>,
+    ) -> Result<()> {
+        base::withdraw_callback(ctx, output)?;
+        Ok(())
+    }
+
     // Escrow
 
     // Lottery

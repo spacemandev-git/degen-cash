@@ -13,6 +13,9 @@ pub use deposit::*;
 pub mod transfer;
 pub use transfer::*;
 
+pub mod withdraw;
+pub use withdraw::*;
+
 pub mod error;
 pub use error::*;
 

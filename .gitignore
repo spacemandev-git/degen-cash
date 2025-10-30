@@ -11,3 +11,4 @@ encrypted-ixs/src/main.rs
 artifacts/
 .surfpool/
 .env
+tests/test-run*
