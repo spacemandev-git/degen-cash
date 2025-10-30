@@ -70,17 +70,24 @@ mod circuits {
 
         let mut status_code = 0_u8;
 
-        if withdraw_amount > user_dc_balance {
+        // Calculate 50 bps (0.5%) withdrawal fee
+        let fee_amount = (withdraw_amount as u128 * 50) / 10000;
+        let total_charge = withdraw_amount as u128 + fee_amount;
+
+        // Check if user has enough balance including fee
+        if total_charge > user_dc_balance as u128 {
             status_code = 2; // Insufficient Funds
         }
 
-        if withdraw_amount > global_mint_amount {
+        // Check if global mint has enough
+        if total_charge > global_mint_amount as u128 {
             status_code = 2; // Insufficient Funds
         }
 
-        let new_global_mint_amount = global_mint_amount - withdraw_amount;
-        let new_user_dc_balance = user_dc_balance - withdraw_amount;
+        let new_global_mint_amount = global_mint_amount - (total_charge as u64);
+        let new_user_dc_balance = user_dc_balance - (total_charge as u64);
 
+        // Check for underflow
         if new_global_mint_amount > global_mint_amount {
             status_code = 1; // Math Overflow
         }
