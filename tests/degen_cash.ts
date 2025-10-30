@@ -304,7 +304,7 @@ describe("Degen Cash", () => {
       const afterSPL = await getSPLBalance(user.ata);
       const dcBalance = await getDecryptedBalance(user);
 
-      log(`  USDC: ${beforeSPL} → ${afterSPL} (Δ -${depositAmounts[i]})`);
+      log(`  USDC: ${Number(beforeSPL) / 1_000_000} → ${Number(afterSPL) / 1_000_000} (Δ -${depositAmounts[i]})`);
       log(`  DC:   0 → ${Number(dcBalance) / 1_000_000} (Δ +${depositAmounts[i]})`);
       log(`  ✓ Deposit successful\n`);
 
@@ -316,11 +316,11 @@ describe("Degen Cash", () => {
     logBox("TEST 2: TRANSFERS");
 
     const transfers = [
-      { from: 0, to: 1, amount: 100, variance: 10, desc: "User 1 → User 2: 100 DC (10% var)" },
-      { from: 1, to: 2, amount: 200, variance: 5, desc: "User 2 → User 3: 200 DC (5% var)" },
+      { from: 0, to: 1, amount: 100, variance: 5, desc: "User 1 → User 2: 100 DC (5% var)" },
+      { from: 1, to: 2, amount: 200, variance: 10, desc: "User 2 → User 3: 200 DC (10% var)" },
       { from: 2, to: 3, amount: 50, variance: 20, desc: "User 3 → User 4: 50 DC (20% var)" },
-      { from: 3, to: 0, amount: 150, variance: 0, desc: "User 4 → User 1: 150 DC (0% var)" },
-      { from: 0, to: 3, amount: 75, variance: 15, desc: "User 1 → User 4: 75 DC (15% var)" },
+      { from: 3, to: 0, amount: 150, variance: 50, desc: "User 4 → User 1: 150 DC (50% var)" },
+      { from: 0, to: 3, amount: 75, variance: 75, desc: "User 1 → User 4: 75 DC (75% var)" },
     ];
 
     for (const t of transfers) {

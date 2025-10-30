@@ -197,7 +197,6 @@ pub struct TransferEvent {
     pub status_code: u8,
     pub variance: u8,
     pub transfer_amount: u64,
-    pub cost_to_sender: [u8; 32],
     pub new_sender_balance: [u8; 32],
     pub new_global_mint_balance: [u8; 32],
     pub new_receiver_balance: [u8; 32],
@@ -214,7 +213,7 @@ pub fn transfer_callback(
                     field_0: status_code,
                     field_1: variance,
                     field_2: transfer_amount,
-                    field_3: sender_event,
+                    field_3: new_sender_balance,
                     field_4: new_global_mint_balance,
                     field_5: new_receiver_balance,
                 },
@@ -222,7 +221,7 @@ pub fn transfer_callback(
             status_code,
             variance,
             transfer_amount,
-            sender_event,
+            new_sender_balance,
             new_global_mint_balance,
             new_receiver_balance,
         ),
@@ -233,23 +232,23 @@ pub fn transfer_callback(
         status_code: o.0,
         variance: o.1,
         transfer_amount: o.2,
-        cost_to_sender: o.3.ciphertexts[0],
-        new_sender_balance: o.3.ciphertexts[1],
+        new_sender_balance: o.3.ciphertexts[0],
         new_global_mint_balance: o.4.ciphertexts[0],
         new_receiver_balance: o.5.ciphertexts[0],
     });
 
-    if o.0 == 0 {
-        // Update accounts if everything is successful
-        ctx.accounts.dc_global_mint_account.supply = o.4.ciphertexts[0];
-        ctx.accounts.dc_global_mint_account.supply_nonce = o.4.nonce;
-        ctx.accounts.dc_user_token_account.amount = o.3.ciphertexts[1];
-        ctx.accounts.dc_user_token_account.amount_nonce = o.3.nonce;
-        ctx.accounts.receiver_dc_user_token_account.amount = o.5.ciphertexts[0];
-        ctx.accounts.receiver_dc_user_token_account.amount_nonce = o.5.nonce;
+    match o.0 {
+        0 => {
+            ctx.accounts.dc_global_mint_account.supply = o.4.ciphertexts[0];
+            ctx.accounts.dc_global_mint_account.supply_nonce = o.4.nonce;
+            ctx.accounts.dc_user_token_account.amount = o.3.ciphertexts[0];
+            ctx.accounts.dc_user_token_account.amount_nonce = o.3.nonce;
+            ctx.accounts.receiver_dc_user_token_account.amount = o.5.ciphertexts[0];
+            ctx.accounts.receiver_dc_user_token_account.amount_nonce = o.5.nonce;
+            Ok(())
+        }
+        _ => Ok(()), // leave things as they are if error in arcis
     }
-
-    Ok(())
 }
 
 // Callback Fn

@@ -10,4 +10,10 @@ pub enum ErrorCode {
     DepositInvalid,
     #[msg("Max Transfer Amount Exceeded")]
     MaxTransferAmountExceeded,
+    #[msg("Transfer Failed: Insufficient Funds")]
+    TransferInsufficientFunds,
+    #[msg("Transfer Failed: Math Overflow")]
+    TransferMathOverflow,
+    #[msg("Transfer Failed: RNG Failure")]
+    TransferRNGFailure,
 }
